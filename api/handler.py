@@ -23,19 +23,16 @@ class handler(BaseHTTPRequestHandler):
             if not last_message:
                 response_text = "Hello! This is the AI Sales Director for Red Volcano. How can I assist you today?"
             else:
-                # 2. Call the dust.tt "Assistant" API with the corrected payload
+                # 2. Call the dust.tt "Assistant" API
                 headers = {
                     "Authorization": f"Bearer {DUST_API_KEY}",
                     "Content-Type": "application/json"
                 }
-                # FINAL CORRECTED PAYLOAD
                 payload = {
                     "message": {
                         "content": last_message,
-                        # CORRECTED: "configurationId" instead of "configuration_id"
                         "mentions": [{"configurationId": DUST_SID}] 
                     },
-                    # ADDED: This tells Dust.tt to wait for the full response
                     "blocking": True 
                 }
                 
@@ -51,4 +48,14 @@ class handler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.end_headers()
-            response_payload = { "choices": [{"index": 0, "message": { "role": "assistant", "content": agent_response_text }, "finish_reason": "stop
+            # FINAL CORRECTION: Added the missing closing quote on "stop"
+            response_payload = { "choices": [{"index": 0, "message": { "role": "assistant", "content": agent_response_text }, "finish_reason": "stop" }] }
+            self.wfile.write(json.dumps(response_payload).encode('utf-8'))
+
+        except Exception as e:
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            error_payload = json.dumps({"error": f"Error interacting with Dust API: {str(e)}"})
+            self.wfile.write(error_payload.encode('utf-8'))
+        return
