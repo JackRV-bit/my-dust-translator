@@ -11,7 +11,8 @@ class handler(BaseHTTPRequestHandler):
             DUST_WID = os.environ.get('DUST_WID')
             DUST_SID = os.environ.get('DUST_SID')
             
-            DUST_API_URL = f"https://dust.tt/api/v1/w/{DUST_WID}/assistant/conversations"
+            # FINAL CORRECTION: Using the EU server address you found
+            DUST_API_URL = f"https://eu.dust.tt/api/v1/w/{DUST_WID}/assistant/conversations"
 
             # 1. Get the last message from the ElevenLabs request
             content_len = int(self.headers.get('Content-Length', 0))
@@ -21,33 +22,28 @@ class handler(BaseHTTPRequestHandler):
                 last_message = body["messages"][-1].get("content", "")
 
             if not last_message:
-                # This is the initial "Hello" from our curl test
                 response_text = "Connection test successful. AI Sales Director is ready."
             else:
-                # 2. Call the dust.tt "Assistant" API with the full, correct payload
+                # 2. Call the dust.tt "Assistant" API with the correct payload
                 headers = {
                     "Authorization": f"Bearer {DUST_API_KEY}",
                     "Content-Type": "application/json"
                 }
-                # FINAL PAYLOAD, MATCHING THE OFFICIAL DOCUMENTATION
                 payload = {
                     "title": "Live Voice Call",
-                    "visibility": "unlisted", # As specified in the docs
+                    "visibility": "unlisted",
                     "message": {
                         "content": last_message,
                         "mentions": [{"configurationId": DUST_SID}] 
                     },
-                    "blocking": True # Wait for the full response
+                    "blocking": True 
                 }
                 
                 api_response = requests.post(DUST_API_URL, headers=headers, json=payload)
-                api_response.raise_for_status() # This will check for errors like 400
+                api_response.raise_for_status()
                 
                 response_data = api_response.json()
-                # Parse the response structure shown in the docs
-                # The response is an array of messages, get the last one which is the agent's
                 agent_message_block = response_data['conversation']['content'][-1]
-                # The message content is inside the first item of that block
                 agent_response_text = agent_message_block[0]['value']['content']
 
             # 3. Send the complete response back to ElevenLabs
