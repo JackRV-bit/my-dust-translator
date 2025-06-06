@@ -10,21 +10,29 @@ class handler(BaseHTTPRequestHandler):
             DUST_API_KEY = os.environ.get('DUST_API_KEY')
             DUST_WID = os.environ.get('DUST_WID')
             DUST_SID = os.environ.get('DUST_SID')
+
+            # --- DEBUGGING: Print the variables to the Vercel Logs ---
+            # This will show us exactly what values the script is using.
+            print("--- STARTING DEBUG LOG ---")
+            print(f"Workspace ID from Vercel: {DUST_WID}")
+            print(f"Agent ID from Vercel: {DUST_SID}")
+            # We only print a small part of the key for security.
+            if DUST_API_KEY:
+                print(f"API Key from Vercel (is present): True, starts with: {DUST_API_KEY[:8]}...")
+            else:
+                print("API Key from Vercel (is present): False")
+            print("--- END DEBUG LOG ---")
+            # -----------------------------------------------------------
             
-            # FINAL CORRECTION: Using the EU server address you found
             DUST_API_URL = f"https://eu.dust.tt/api/v1/w/{DUST_WID}/assistant/conversations"
 
-            # 1. Get the last message from the ElevenLabs request
             content_len = int(self.headers.get('Content-Length', 0))
             body = json.loads(self.rfile.read(content_len))
-            last_message = ""
-            if body.get("messages"):
-                last_message = body["messages"][-1].get("content", "")
+            last_message = body.get("messages", [{}])[-1].get("content", "")
 
             if not last_message:
-                response_text = "Connection test successful. AI Sales Director is ready."
+                response_text = "Connection test successful."
             else:
-                # 2. Call the dust.tt "Assistant" API with the correct payload
                 headers = {
                     "Authorization": f"Bearer {DUST_API_KEY}",
                     "Content-Type": "application/json"
@@ -32,10 +40,7 @@ class handler(BaseHTTPRequestHandler):
                 payload = {
                     "title": "Live Voice Call",
                     "visibility": "unlisted",
-                    "message": {
-                        "content": last_message,
-                        "mentions": [{"configurationId": DUST_SID}] 
-                    },
+                    "message": { "content": last_message, "mentions": [{"configurationId": DUST_SID}] },
                     "blocking": True 
                 }
                 
@@ -46,7 +51,6 @@ class handler(BaseHTTPRequestHandler):
                 agent_message_block = response_data['conversation']['content'][-1]
                 agent_response_text = agent_message_block[0]['value']['content']
 
-            # 3. Send the complete response back to ElevenLabs
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.end_headers()
@@ -57,6 +61,8 @@ class handler(BaseHTTPRequestHandler):
             self.send_response(500)
             self.send_header('Content-type', 'application/json')
             self.end_headers()
+            # Also print the exception to the log for more detail
+            print(f"An exception occurred: {str(e)}")
             error_payload = json.dumps({"error": f"Error interacting with Dust API: {str(e)}"})
             self.wfile.write(error_payload.encode('utf-8'))
         return
