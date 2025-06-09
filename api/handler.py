@@ -11,7 +11,6 @@ class handler(BaseHTTPRequestHandler):
             DUST_WID = os.environ.get('DUST_WID')
             DUST_SID = os.environ.get('DUST_SID')
             
-            # FINAL CORRECTION: Using the main dust.tt server address as per support's instruction
             DUST_API_URL = f"https://dust.tt/api/v1/w/{DUST_WID}/assistant/conversations"
 
             # 1. Get the last message from the ElevenLabs request
@@ -24,17 +23,21 @@ class handler(BaseHTTPRequestHandler):
             if not last_message:
                 response_text = "Connection test successful. AI Sales Director is ready."
             else:
-                # 2. Call the dust.tt "Assistant" API
+                # 2. Call the dust.tt API with the payload that is now confirmed to work
                 headers = {
                     "Authorization": f"Bearer {DUST_API_KEY}",
                     "Content-Type": "application/json"
                 }
+                # FINAL PAYLOAD with the required "context" object
                 payload = {
-                    "title": "Live Voice Call",
-                    "visibility": "unlisted",
                     "message": {
                         "content": last_message,
-                        "mentions": [{"configurationId": DUST_SID}] 
+                        "mentions": [{"configurationId": DUST_SID}],
+                        "context": {
+                            "timezone": "Europe/London",
+                            "username": "Jack-Voice-Call",
+                            "origin": "api"
+                        }
                     },
                     "blocking": True 
                 }
