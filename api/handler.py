@@ -20,15 +20,15 @@ class handler(BaseHTTPRequestHandler):
             if body.get("messages"):
                 last_message = body["messages"][-1].get("content", "")
 
-            if not last_message:
-                response_text = "Connection test successful. AI Sales Director is ready."
-            else:
-                # 2. Call the dust.tt API with the payload that is now confirmed to work
+            # This is a temporary response for the debugging step
+            agent_response_text = "Debugging... Check Vercel Logs."
+            
+            if last_message:
+                # 2. Call the dust.tt API
                 headers = {
                     "Authorization": f"Bearer {DUST_API_KEY}",
                     "Content-Type": "application/json"
                 }
-                # FINAL PAYLOAD with the required "context" object
                 payload = {
                     "message": {
                         "content": last_message,
@@ -46,10 +46,25 @@ class handler(BaseHTTPRequestHandler):
                 api_response.raise_for_status()
                 
                 response_data = api_response.json()
-                agent_message_block = response_data['conversation']['content'][-1]
-                agent_response_text = agent_message_block[0]['value']['content']
 
-            # 3. Send the complete response back to ElevenLabs
+                # --- NEW DEBUGGING STEP ---
+                # This will print the full, detailed response from Dust.tt into the Vercel logs
+                print("--- START DUST.TT API RESPONSE ---")
+                print(json.dumps(response_data, indent=2))
+                print("--- END DUST.TT API RESPONSE ---")
+                # -----------------------------
+
+                # This old logic will now be skipped, but the log will tell us what the new logic should be.
+                # We will fix the parsing in the next step.
+                agent_message_block = response_data['conversation']['content'][-1]
+                # Check if the message is from the agent
+                if agent_message_block[0]['type'] == 'agent_message':
+                    agent_response_text = agent_message_block[0]['content']
+                else: # Fallback for now
+                    agent_response_text = "Response received, but format is unexpected."
+
+
+            # 3. Send the response back to ElevenLabs
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.end_headers()
@@ -60,6 +75,8 @@ class handler(BaseHTTPRequestHandler):
             self.send_response(500)
             self.send_header('Content-type', 'application/json')
             self.end_headers()
+            # Also print the exception to the log for more detail
+            print(f"An exception occurred: {str(e)}")
             error_payload = json.dumps({"error": f"Error interacting with Dust API: {str(e)}"})
             self.wfile.write(error_payload.encode('utf-8'))
         return
