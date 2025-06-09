@@ -16,13 +16,10 @@ class handler(BaseHTTPRequestHandler):
             # 1. Get the last message from the ElevenLabs request
             content_len = int(self.headers.get('Content-Length', 0))
             body = json.loads(self.rfile.read(content_len))
-            last_message = ""
-            if body.get("messages"):
-                last_message = body["messages"][-1].get("content", "")
+            last_message = body.get("messages", [{}])[-1].get("content", "")
 
-            # This is a temporary response for the debugging step
-            agent_response_text = "Debugging... Check Vercel Logs."
-            
+            agent_response_text = "No response generated."
+
             if last_message:
                 # 2. Call the dust.tt API
                 headers = {
@@ -42,29 +39,28 @@ class handler(BaseHTTPRequestHandler):
                     "blocking": True 
                 }
                 
-                api_response = requests.post(DUST_API_URL, headers=headers, json=payload)
+                # Make the request with streaming enabled
+                api_response = requests.post(DUST_API_URL, headers=headers, json=payload, stream=True)
                 api_response.raise_for_status()
                 
-                response_data = api_response.json()
+                # --- FINAL CORRECTED LOGIC: Read the event stream ---
+                # Iterate through each line of the response to find the agent's message.
+                for line in api_response.iter_lines():
+                    if line:
+                        # The stream sends lines like "data: { ... }", we need to clean that up
+                        line_str = line.decode('utf-8').lstrip('data: ')
+                        if line_str and '"type":"agent_message"' in line_str:
+                            try:
+                                # Parse the line as JSON and extract the content
+                                event_data = json.loads(line_str)
+                                agent_response_text = event_data.get('message', {}).get('content', '')
+                                break # Stop after finding the first agent message
+                            except json.JSONDecodeError:
+                                continue # Ignore lines that aren't valid JSON
+            else:
+                agent_response_text = "Connection test successful. AI Sales Director is ready."
 
-                # --- NEW DEBUGGING STEP ---
-                # This will print the full, detailed response from Dust.tt into the Vercel logs
-                print("--- START DUST.TT API RESPONSE ---")
-                print(json.dumps(response_data, indent=2))
-                print("--- END DUST.TT API RESPONSE ---")
-                # -----------------------------
-
-                # This old logic will now be skipped, but the log will tell us what the new logic should be.
-                # We will fix the parsing in the next step.
-                agent_message_block = response_data['conversation']['content'][-1]
-                # Check if the message is from the agent
-                if agent_message_block[0]['type'] == 'agent_message':
-                    agent_response_text = agent_message_block[0]['content']
-                else: # Fallback for now
-                    agent_response_text = "Response received, but format is unexpected."
-
-
-            # 3. Send the response back to ElevenLabs
+            # 3. Send the complete response back to ElevenLabs
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.end_headers()
@@ -75,7 +71,6 @@ class handler(BaseHTTPRequestHandler):
             self.send_response(500)
             self.send_header('Content-type', 'application/json')
             self.end_headers()
-            # Also print the exception to the log for more detail
             print(f"An exception occurred: {str(e)}")
             error_payload = json.dumps({"error": f"Error interacting with Dust API: {str(e)}"})
             self.wfile.write(error_payload.encode('utf-8'))
